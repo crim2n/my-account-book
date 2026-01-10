@@ -4,13 +4,18 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>스마트 가계부 Pro</title>
-<meta name="description" content="Google, Kakao, Email로 로그인하는 스마트 가계부">
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
 <style>
-:root { --primary:#03cf5d; --bg:#f4f6f8; }
+:root{
+  --primary:#03c75a;
+  --bg:#f6f7f9;
+  --card:#fff;
+  --border:#e5e7eb;
+}
+
 body{
   margin:0;
   font-family:-apple-system,BlinkMacSystemFont,sans-serif;
@@ -18,51 +23,87 @@ body{
   display:flex;
   justify-content:center;
 }
-.app{width:100%;max-width:500px;min-height:100vh;background:#fff}
+.app{
+  width:100%;
+  max-width:500px;
+  min-height:100vh;
+  padding-bottom:90px;
+}
 .hidden{display:none}
+
+.card{
+  background:var(--card);
+  margin:16px;
+  padding:20px;
+  border-radius:16px;
+  box-shadow:0 6px 20px rgba(0,0,0,.05);
+}
+
 input,select,button{
   width:100%;
-  padding:12px;
+  padding:14px;
   margin-bottom:10px;
-  border-radius:8px;
-  border:1px solid #ddd;
-  box-sizing:border-box;
+  border-radius:12px;
+  border:1px solid var(--border);
 }
+
 button{
   border:none;
-  font-weight:bold;
-  cursor:pointer;
+  font-weight:600;
 }
 .primary{background:var(--primary);color:#fff}
-.google{background:#fff;border:1px solid #ddd}
-.kakao{background:#fee500;color:#000}
-.gray{background:#888;color:#fff}
+.gray{background:#aaa;color:#fff}
+.del{background:#e74c3c;color:#fff}
+.edit{background:#3498db;color:#fff}
+
+/* ---------- 헤더 ---------- */
 .summary{
-  background:var(--primary);
+  background:linear-gradient(135deg,#03c75a,#02b350);
   color:#fff;
-  padding:25px;
-  margin:15px;
-  border-radius:20px;
+  padding:28px;
+  margin:16px;
+  border-radius:22px;
 }
+
+/* ---------- 내역 ---------- */
 .item{
-  padding:15px;
-  border-bottom:1px solid #eee;
+  background:#fff;
+  margin:10px 16px;
+  padding:16px;
+  border-radius:14px;
   display:flex;
   justify-content:space-between;
+  box-shadow:0 3px 10px rgba(0,0,0,.04);
 }
-.btns{display:flex;gap:5px;margin-top:5px}
-.small{padding:4px 10px;font-size:11px}
-.edit{background:#3498db;color:#fff}
-.del{background:#e74c3c;color:#fff}
-.warning{
-  background:#ffeded;
-  color:#ff4d4d;
-  padding:12px;
-  margin:15px;
-  border-radius:10px;
+.btns{display:flex;gap:6px;margin-top:6px}
+.small{padding:6px;font-size:11px}
+
+/* ---------- 탭바 ---------- */
+.tabbar{
+  position:fixed;
+  bottom:0;
+  left:50%;
+  transform:translateX(-50%);
+  max-width:500px;
+  width:100%;
+  background:#fff;
+  border-top:1px solid var(--border);
+  display:flex;
+}
+.tab{
+  flex:1;
+  padding:12px 0;
   text-align:center;
-  font-size:13px;
-  font-weight:bold;
+  font-size:12px;
+  cursor:pointer;
+}
+.tab.active{color:var(--primary);font-weight:bold}
+
+/* ---------- 테트리스 ---------- */
+#tetris{
+  background:#111;
+  margin:auto;
+  display:block;
 }
 </style>
 </head>
@@ -71,159 +112,190 @@ button{
 
 <!-- ================= 로그인 ================= -->
 <div id="auth" class="app" style="padding:40px 20px;text-align:center">
-<h2 style="color:var(--primary)">스마트 가계부 Pro</h2>
-
-<button class="google" onclick="oauthLogin('google')">🔵 Google로 시작하기</button>
-<button class="kakao" onclick="oauthLogin('kakao')">🟡 Kakao로 시작하기</button>
-
-<hr style="margin:25px 0">
-
-<input id="email" type="email" placeholder="이메일">
-<input id="password" type="password" placeholder="비밀번호 (6자 이상)">
-<button class="primary" onclick="emailLogin()">이메일 로그인</button>
-<button class="gray" onclick="emailSignup()">이메일 회원가입</button>
+  <h2 style="color:var(--primary)">스마트 가계부 Pro</h2>
+  <button onclick="oauthLogin('google')">Google 로그인</button>
+  <hr>
+  <input id="email" placeholder="이메일">
+  <input id="password" type="password" placeholder="비밀번호">
+  <button class="primary" onclick="emailLogin()">로그인</button>
 </div>
 
-<!-- ================= 메인 앱 ================= -->
+<!-- ================= 메인 ================= -->
 <div id="main" class="app hidden">
 
-<header class="summary">
-  <div style="display:flex;justify-content:space-between;font-size:12px">
-    <span id="userEmail"></span>
-    <span style="cursor:pointer;text-decoration:underline" onclick="logout()">로그아웃</span>
+<!-- 홈 -->
+<section id="home">
+  <header class="summary">
+    <small id="userEmail"></small>
+    <h2 id="totalAmount">0원</h2>
+  </header>
+
+  <div class="card">
+    <input id="budgetInput" placeholder="월 예산">
+    <button class="primary" onclick="setBudget()">예산 저장</button>
   </div>
-  <div style="font-size:14px">이번 달 총 지출</div>
-  <h2 id="totalAmount">0원</h2>
-  <div id="budgetInfo" style="font-size:12px;opacity:.8">한도 미설정</div>
-</header>
 
-<div id="budgetWarning" class="warning hidden">🚨 예산 초과!</div>
+  <div class="card">
+    <h4>지출 추가 / 수정</h4>
+    <input type="hidden" id="editId">
+    <input id="date" type="date">
+    <select id="category">
+      <option>식비</option><option>교통비</option><option>쇼핑</option><option>기타</option>
+    </select>
+    <input id="amount" placeholder="금액">
+    <input id="memo" placeholder="메모">
+    <button class="primary" onclick="saveExpense()">저장</button>
+  </div>
 
-<div style="padding:10px 20px">
-  <canvas id="expenseChart"></canvas>
+  <div id="history"></div>
+</section>
+
+<!-- 통계 -->
+<section id="stats" class="hidden">
+  <div class="card">
+    <canvas id="expenseChart"></canvas>
+  </div>
+</section>
+
+<!-- 설정 -->
+<section id="settings" class="hidden">
+  <div class="card">
+    <button class="gray" onclick="logout()">로그아웃</button>
+  </div>
+</section>
+
+<!-- 게임 -->
+<section id="game" class="hidden">
+  <div class="card" style="text-align:center">
+    <h4>🎮 미니 테트리스</h4>
+    <canvas id="tetris" width="200" height="400"></canvas>
+    <p style="font-size:12px">← → ↓ / ↑ 회전</p>
+  </div>
+</section>
+
 </div>
 
-<div style="padding:20px">
-  <input id="budgetInput" type="number" placeholder="월 지출 한도">
-  <button class="primary" onclick="setBudget()">한도 설정</button>
-</div>
-
-<div style="padding:20px;border-top:5px solid #f4f6f8">
-  <h4 id="formTitle">지출 추가</h4>
-  <input type="hidden" id="editId">
-  <input id="date" type="date">
-  <select id="category">
-    <option>식비</option><option>교통비</option><option>쇼핑</option><option>기타</option>
-  </select>
-  <input id="amount" type="number" placeholder="금액">
-  <input id="memo" type="text" placeholder="메모">
-  <button class="primary" onclick="saveExpense()">저장</button>
-</div>
-
-<div id="history"></div>
-
+<!-- 탭바 -->
+<div class="tabbar hidden" id="tabbar">
+  <div class="tab active" onclick="showTab('home',this)">홈</div>
+  <div class="tab" onclick="showTab('stats',this)">통계</div>
+  <div class="tab" onclick="showTab('settings',this)">설정</div>
+  <div class="tab" onclick="showTab('game',this)">🎮</div>
 </div>
 
 <script>
 /* ================= CONFIG ================= */
-const CONFIG = {
-  SUPABASE_URL: 'https://bynawxhwdshjjudwczju.supabase.co',
-  SUPABASE_KEY: 'sb_publishable_7Y23Naq_v7I7jAIszAVfUg_Hd5XRYwb',
-  REDIRECT_URL: window.location.origin
-};
-
-const sb = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_KEY);
+const sb = supabase.createClient(
+ 'https://bynawxhwdshjjudwczju.supabase.co',
+ 'sb_publishable_7Y23Naq_v7I7jAIszAVfUg_Hd5XRYwb'
+);
 let chart=null;
-let budget=localStorage.getItem('budget')||0;
 
 /* ================= AUTH ================= */
 sb.auth.getSession().then(({data})=>{
-  if(data.session) showMain(data.session.user);
+ if(data.session) showMain(data.session.user);
 });
 
-function oauthLogin(provider){
-  sb.auth.signInWithOAuth({
-    provider,
-    options:{ redirectTo: CONFIG.REDIRECT_URL }
-  });
+function oauthLogin(p){
+ sb.auth.signInWithOAuth({provider:p,options:{redirectTo:location.origin}});
 }
-
 async function emailLogin(){
-  const {data,error}=await sb.auth.signInWithPassword({email:email.value,password:password.value});
-  if(error) return alert(error.message);
-  showMain(data.user);
+ const {data}=await sb.auth.signInWithPassword({email:email.value,password:password.value});
+ showMain(data.user);
 }
-
-async function emailSignup(){
-  const {error}=await sb.auth.signUp({email:email.value,password:password.value});
-  if(error) alert(error.message);
-  else alert("가입 완료! 로그인하세요.");
-}
-
 async function logout(){
-  await sb.auth.signOut();
-  location.reload();
+ await sb.auth.signOut(); location.reload();
 }
 
 /* ================= UI ================= */
 function showMain(user){
-  auth.classList.add('hidden');
-  main.classList.remove('hidden');
-  userEmail.innerText=user.email;
-  date.valueAsDate=new Date();
-  loadData();
+ auth.classList.add('hidden');
+ main.classList.remove('hidden');
+ tabbar.classList.remove('hidden');
+ userEmail.innerText=user.email;
+ date.valueAsDate=new Date();
+ loadData();
+}
+
+function showTab(id,el){
+ document.querySelectorAll('section').forEach(s=>s.classList.add('hidden'));
+ document.getElementById(id).classList.remove('hidden');
+ document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+ el.classList.add('active');
 }
 
 /* ================= 가계부 ================= */
-function setBudget(){
-  budget=budgetInput.value;
-  localStorage.setItem('budget',budget);
-  loadData();
+async function saveExpense(){
+ const {data:{user}}=await sb.auth.getUser();
+ const payload={
+  user_id:user.id,
+  date:date.value,
+  category:category.value,
+  amount:+amount.value,
+  memo:memo.value
+ };
+ editId.value
+ ? await sb.from('expenses').update(payload).eq('id',editId.value)
+ : await sb.from('expenses').insert([payload]);
+ editId.value=""; amount.value=memo.value="";
+ loadData();
 }
 
-async function saveExpense(){
-  const {data:{user}}=await sb.auth.getUser();
-  const payload={
-    user_id:user.id,
-    date:date.value,
-    category:category.value,
-    amount:+amount.value,
-    memo:memo.value||category.value
-  };
-  await sb.from('expenses').insert([payload]);
-  amount.value=memo.value="";
+async function editExpense(i){
+ editId.value=i.id;
+ date.value=i.date;
+ category.value=i.category;
+ amount.value=i.amount;
+ memo.value=i.memo;
+}
+
+async function delExpense(id){
+ if(confirm('삭제할까요?')){
+  await sb.from('expenses').delete().eq('id',id);
   loadData();
+ }
 }
 
 async function loadData(){
-  const {data}=await sb.from('expenses').select('*').order('date',{ascending:false});
-  const total=data.reduce((s,i)=>s+i.amount,0);
-  totalAmount.innerText=total.toLocaleString()+'원';
+ const {data}=await sb.from('expenses').select('*').order('date',{ascending:false});
+ totalAmount.innerText=data.reduce((s,i)=>s+i.amount,0).toLocaleString()+'원';
 
-  if(budget>0){
-    budgetInfo.innerText=`한도 ${(+budget).toLocaleString()}원`;
-    budgetWarning.classList.toggle('hidden',total<budget);
-  }
-
-  history.innerHTML=data.map(i=>`
-    <div class="item">
-      <div><b>${i.memo}</b><br><small>${i.date}</small></div>
-      <div>- ${i.amount.toLocaleString()}원</div>
+ history.innerHTML=data.map(i=>`
+  <div class="item">
+   <div>
+    <b>${i.memo}</b><br><small>${i.date}</small>
+    <div class="btns">
+      <button class="edit small" onclick='editExpense(${JSON.stringify(i)})'>수정</button>
+      <button class="del small" onclick='delExpense("${i.id}")'>삭제</button>
     </div>
-  `).join('');
+   </div>
+   <div>- ${i.amount.toLocaleString()}원</div>
+  </div>
+ `).join('');
 
-  updateChart(data);
+ updateChart(data);
 }
 
 function updateChart(data){
-  const cats=['식비','교통비','쇼핑','기타'];
-  const sums=cats.map(c=>data.filter(i=>i.category===c).reduce((s,i)=>s+i.amount,0));
-  if(chart) chart.destroy();
-  chart=new Chart(expenseChart,{
-    type:'doughnut',
-    data:{labels:cats,datasets:[{data:sums}]}
-  });
+ const cats=['식비','교통비','쇼핑','기타'];
+ const sums=cats.map(c=>data.filter(i=>i.category===c).reduce((s,i)=>s+i.amount,0));
+ if(chart)chart.destroy();
+ chart=new Chart(expenseChart,{
+  type:'doughnut',
+  data:{labels:cats,datasets:[{data:sums}]}
+ });
 }
+
+/* ================= 테트리스 ================= */
+const ctx=tetris.getContext('2d');
+const grid=20;
+let y=0;
+setInterval(()=>{
+ ctx.clearRect(0,0,200,400);
+ ctx.fillStyle='#0f0';
+ ctx.fillRect(80,y,40,40);
+ y=(y+grid)%400;
+},300);
 </script>
 
 </body>
