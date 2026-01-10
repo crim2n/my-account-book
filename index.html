@@ -1,269 +1,193 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>스마트 가계부 Pro - 자산관리의 시작</title>
-    <meta name="description" content="무료로 이용하는 스마트 가계부 Pro. 지출 내역을 체계적으로 관리하고 목표 예산을 달성하세요.">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root { --primary-color: #03cf5d; --bg-color: #f4f6f8; }
-        body { font-family: -apple-system, sans-serif; background: var(--bg-color); margin: 0; display: flex; justify-content: center; }
-        .app-container { width: 100%; max-width: 500px; min-height: 100vh; background: white; position: relative; padding-bottom: 50px; box-shadow: 0 0 20px rgba(0,0,0,0.05); }
-        .hidden { display: none !important; }
-        
-        /* 헤더 및 요약 */
-        .summary-card { background: var(--primary-color); color: white; padding: 25px; margin: 15px; border-radius: 20px; box-shadow: 0 4px 15px rgba(3,207,93,0.3); }
-        .user-info { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 10px; opacity: 0.9; }
-        
-        /* 입력창 및 설정 */
-        .input-group, .budget-setting { padding: 20px; border-bottom: 5px solid #f4f6f8; }
-        input, select, button { width: 100%; padding: 12px; margin-bottom: 10px; border-radius: 8px; border: 1px solid #ddd; box-sizing: border-box; font-size: 14px; }
-        button { background: var(--primary-color); color: white; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; }
-        button:active { opacity: 0.8; }
-        
-        /* 리스트 아이템 */
-        .item { padding: 15px; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
-        .btn-group { display: flex; gap: 5px; margin-top: 5px; }
-        .small-btn { width: auto; padding: 4px 10px; font-size: 11px; margin: 0; }
-        .edit-btn { background: #3498db; }
-        .del-btn { background: #e74c3c; }
-        
-        /* 알림 박스 */
-        .warning-box { background: #ffeded; color: #ff4d4d; padding: 12px; margin: 15px; border-radius: 10px; font-size: 13px; text-align: center; font-weight: bold; border: 1px solid #ffcccc; }
-        .budget-setting { background: #fff; border-bottom: 5px solid #f4f6f8; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>스마트 가계부 Pro</title>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+:root {
+  --primary:#03cf5d;
+  --bg:#f4f6f8;
+}
+body{
+  margin:0;
+  background:var(--bg);
+  font-family:-apple-system, BlinkMacSystemFont, sans-serif;
+  display:flex;
+  justify-content:center;
+}
+.app{
+  width:100%;
+  max-width:480px;
+  min-height:100vh;
+  background:#fff;
+}
+.hidden{display:none}
+
+h2{margin-bottom:20px}
+input,button{
+  width:100%;
+  padding:12px;
+  margin-bottom:10px;
+  border-radius:8px;
+  font-size:14px;
+}
+input{border:1px solid #ddd}
+button{
+  border:none;
+  cursor:pointer;
+  font-weight:bold;
+}
+.google{background:#fff;border:1px solid #ddd}
+.kakao{background:#fee500;color:#000}
+.email{background:var(--primary);color:#fff}
+.gray{background:#888;color:#fff}
+.divider{
+  margin:25px 0;
+  font-size:12px;
+  color:#aaa;
+  position:relative;
+}
+.divider::before,
+.divider::after{
+  content:"";
+  position:absolute;
+  top:50%;
+  width:40%;
+  height:1px;
+  background:#ddd;
+}
+.divider::before{left:0}
+.divider::after{right:0}
+header{
+  background:var(--primary);
+  color:#fff;
+  padding:20px;
+}
+</style>
 </head>
+
 <body>
 
-<div id="authArea" class="app-container" style="text-align:center; padding-top:60px;">
-    <h2 style="color: var(--primary-color);">스마트 가계부 Pro</h2>
-    <p style="color:#666; font-size:14px;">로그인하여 자산을 관리하세요</p>
-    <div style="padding:20px;">
-        <input type="email" id="userEmail" placeholder="이메일 주소">
-        <input type="password" id="userPw" placeholder="비밀번호 (6자 이상)">
-        <button onclick="handleSignIn()">로그인</button>
-        <button style="background:#888" onclick="handleSignUp()">신규 회원가입</button>
-    </div>
+<!-- ================= LOGIN ================= -->
+<div id="auth" class="app" style="padding:60px 20px;text-align:center">
+
+<h2 style="color:var(--primary)">스마트 가계부 Pro</h2>
+
+<button class="google" onclick="oauthLogin('google')">
+🔵 Google로 시작하기
+</button>
+
+<button class="kakao" onclick="oauthLogin('kakao')">
+🟡 Kakao로 시작하기
+</button>
+
+<div class="divider">또는</div>
+
+<input id="email" type="email" placeholder="이메일">
+<input id="password" type="password" placeholder="비밀번호 (6자 이상)">
+
+<button class="email" onclick="emailLogin()">이메일 로그인</button>
+<button class="gray" onclick="emailSignup()">이메일 회원가입</button>
+
 </div>
 
-<div id="mainApp" class="app-container hidden">
-    <header class="summary-card">
-        <div class="user-info">
-            <span id="userDisplay">사용자</span>
-            <span onclick="handleSignOut()" style="cursor:pointer; text-decoration:underline;">로그아웃</span>
-        </div>
-        <div style="font-size:14px;">이번 달 총 지출</div>
-        <h2 id="totalAmount" style="margin:10px 0;">0원</h2>
-        <div id="budgetInfo" style="font-size:12px; opacity:0.8;">한도 미설정</div>
-    </header>
+<!-- ================= MAIN ================= -->
+<div id="main" class="app hidden">
 
-    <div id="budgetWarning" class="warning-box hidden">🚨 예산 초과! 지출 한도를 넘었습니다.</div>
+<header>
+  <span id="userEmail"></span>
+  <span style="float:right;cursor:pointer" onclick="logout()">로그아웃</span>
+  <h2 id="totalAmount">0원</h2>
+</header>
 
-    <div style="padding: 10px 20px;"><canvas id="expenseChart"></canvas></div>
+<div style="padding:15px">
+  <canvas id="expenseChart"></canvas>
+</div>
 
-    <div class="budget-setting">
-        <label style="font-size:13px; font-weight:bold; color:#444;">🎯 월 지출 한도 설정</label>
-        <div style="display:flex; gap:10px; margin-top:8px;">
-            <input type="number" id="budgetInput" placeholder="예: 500000" style="margin:0;">
-            <button onclick="setBudget()" style="width:80px; margin:0;">설정</button>
-        </div>
-    </div>
-
-    <div class="input-group">
-        <h4 id="formTitle" style="margin:0 0 15px 0;">지출 내역 추가</h4>
-        <input type="hidden" id="editId">
-        <input type="date" id="date">
-        <select id="category">
-            <option>식비</option><option>교통비</option><option>쇼핑</option><option>기타</option>
-        </select>
-        <input type="number" id="amount" placeholder="금액 입력">
-        <input type="text" id="memo" placeholder="메모 (내용)">
-        <button id="saveBtn" onclick="saveExpense()">저장하기</button>
-        <button id="cancelBtn" class="hidden" style="background:#888" onclick="resetForm()">취소</button>
-    </div>
-
-    <div id="historyList"></div>
 </div>
 
 <script>
-    // [중요] 여기에 본인의 Supabase 정보를 넣으세요
-    const SB_URL = 'https://bynawxhwdshjjudwczju.supabase.co';
-    const SB_KEY = 'sb_publishable_7Y23Naq_v7I7jAIszAVfUg_Hd5XRYwb';
+/* ======================
+   🔧 CONFIG (여기만 수정)
+====================== */
+const CONFIG = {
+  SUPABASE: {
+    URL: 'https://bynawxhwdshjjudwczju.supabase.co',
+    ANON_KEY: 'sb_publishable_7Y23Naq_v7I7jAIszAVfUg_Hd5XRYwb'
+  },
+  OAUTH: {
+    REDIRECT_URL: window.location.origin
+  }
+};
 
-    let sb = null;
-    let expenseChart = null;
-    let currentBudget = localStorage.getItem('user_budget') || 0;
+/* ======================
+   INIT
+====================== */
+const sb = supabase.createClient(
+  CONFIG.SUPABASE.URL,
+  CONFIG.SUPABASE.ANON_KEY
+);
 
-    // 초기화 및 자동 로그인
-    (function init() {
-        if (!window.supabase) { setTimeout(init, 100); return; }
-        sb = window.supabase.createClient(SB_URL, SB_KEY);
-        
-        sb.auth.getSession().then(({data:{session}}) => {
-            if (session) showMain(session.user.email);
-        });
-    })();
+// 자동 로그인
+sb.auth.getSession().then(({ data }) => {
+  if (data.session) showMain(data.session.user);
+});
 
-    // 한도 설정
-    function setBudget() {
-        const val = document.getElementById('budgetInput').value;
-        if(!val) return alert("한도 금액을 입력해주세요.");
-        currentBudget = parseInt(val);
-        localStorage.setItem('user_budget', currentBudget);
-        alert("한도가 설정되었습니다.");
-        loadData();
+/* ======================
+   AUTH
+====================== */
+
+// OAuth (Google / Kakao)
+// 👉 회원가입 + 로그인 자동 처리
+async function oauthLogin(provider){
+  await sb.auth.signInWithOAuth({
+    provider,
+    options:{
+      redirectTo: CONFIG.OAUTH.REDIRECT_URL
     }
+  });
+}
 
-    // 메인 화면 전환
-    function showMain(email) {
-        document.getElementById('authArea').classList.add('hidden');
-        document.getElementById('mainApp').classList.remove('hidden');
-        document.getElementById('userDisplay').innerText = email;
-        document.getElementById('date').valueAsDate = new Date();
-        document.getElementById('budgetInput').value = currentBudget > 0 ? currentBudget : "";
-        loadData();
-    }
+// Email 로그인
+async function emailLogin(){
+  const { data, error } = await sb.auth.signInWithPassword({
+    email: email.value,
+    password: password.value
+  });
+  if (error) return alert(error.message);
+  showMain(data.user);
+}
 
-    // 로그인
-    async function handleSignIn() {
-        const email = document.getElementById('userEmail').value;
-        const password = document.getElementById('userPw').value;
-        const { data, error } = await sb.auth.signInWithPassword({ email, password });
-        if (error) alert("로그인 실패: " + error.message);
-        else if (data.session) showMain(data.user.email);
-    }
+// Email 회원가입
+async function emailSignup(){
+  const { error } = await sb.auth.signUp({
+    email: email.value,
+    password: password.value
+  });
+  if (error) alert(error.message);
+  else alert("가입 완료! 로그인하세요.");
+}
 
-    // 회원가입
-    async function handleSignUp() {
-        const email = document.getElementById('userEmail').value;
-        const password = document.getElementById('userPw').value;
-        const { error } = await sb.auth.signUp({ email, password });
-        if (error) alert("가입 에러: " + error.message);
-        else alert("가입 성공! 이제 로그인 버튼을 눌러주세요.");
-    }
+// 로그아웃
+async function logout(){
+  await sb.auth.signOut();
+  location.reload();
+}
 
-    // [강력한 로그아웃] 인증 세션과 로컬 스토리지를 모두 비웁니다.
-    async function handleSignOut() {
-        if(!confirm("로그아웃 하시겠습니까?")) return;
-        await sb.auth.signOut();
-        // Supabase 관련 모든 로컬 데이터 삭제
-        Object.keys(localStorage).forEach(key => {
-            if(key.includes('supabase.auth.token')) localStorage.removeItem(key);
-        });
-        alert("정상적으로 로그아웃되었습니다.");
-        location.reload(); 
-    }
-
-    // 저장 및 수정
-    async function saveExpense() {
-        const {data:{user}} = await sb.auth.getUser();
-        const id = document.getElementById('editId').value;
-        const amount = parseInt(document.getElementById('amount').value);
-        if(!amount) return alert("금액을 입력하세요.");
-
-        const payload = {
-            user_id: user.id,
-            date: document.getElementById('date').value,
-            category: document.getElementById('category').value,
-            amount: amount,
-            memo: document.getElementById('memo').value || document.getElementById('category').value
-        };
-
-        const { error } = id ? 
-            await sb.from('expenses').update(payload).eq('id', id) : 
-            await sb.from('expenses').insert([payload]);
-
-        if (error) alert("저장 실패: " + error.message);
-        else { resetForm(); loadData(); }
-    }
-
-    // 수정 모드
-    function startEdit(item) {
-        document.getElementById('formTitle').innerText = "내역 수정 중...";
-        document.getElementById('editId').value = item.id;
-        document.getElementById('date').value = item.date;
-        document.getElementById('category').value = item.category;
-        document.getElementById('amount').value = item.amount;
-        document.getElementById('memo').value = item.memo;
-        document.getElementById('saveBtn').innerText = "수정 완료하기";
-        document.getElementById('cancelBtn').classList.remove('hidden');
-        window.scrollTo({top: 0, behavior: 'smooth'});
-    }
-
-    function resetForm() {
-        document.getElementById('formTitle').innerText = "지출 내역 추가";
-        document.getElementById('editId').value = "";
-        document.getElementById('amount').value = "";
-        document.getElementById('memo').value = "";
-        document.getElementById('saveBtn').innerText = "저장하기";
-        document.getElementById('cancelBtn').classList.add('hidden');
-    }
-
-    // 삭제
-    async function deleteItem(id) {
-        if(!confirm("정말 이 내역을 삭제하시겠습니까?")) return;
-        const { error } = await sb.from('expenses').delete().eq('id', id);
-        if (error) alert("삭제 실패"); else loadData();
-    }
-
-    // 데이터 로드 및 UI 업데이트
-    async function loadData() {
-        const { data, error } = await sb.from('expenses').select('*').order('date', { ascending: false });
-        if (error) return;
-
-        const total = data.reduce((sum, item) => sum + Number(item.amount), 0);
-        document.getElementById('totalAmount').innerText = total.toLocaleString() + '원';
-
-        // 한도 체크 및 경고
-        const warning = document.getElementById('budgetWarning');
-        const info = document.getElementById('budgetInfo');
-        if (currentBudget > 0) {
-            const percent = ((total / currentBudget) * 100).toFixed(1);
-            info.innerText = `한도 ${Number(currentBudget).toLocaleString()}원 중 ${percent}% 사용 중`;
-            total >= currentBudget ? warning.classList.remove('hidden') : warning.classList.add('hidden');
-        } else {
-            info.innerText = "한도 미설정";
-            warning.classList.add('hidden');
-        }
-
-        // 리스트 렌더링
-        document.getElementById('historyList').innerHTML = data.map(item => `
-            <div class="item">
-                <div>
-                    <span style="font-size:11px; color:var(--primary-color); font-weight:bold;">${item.category}</span><br>
-                    <b style="font-size:15px;">${item.memo}</b><br>
-                    <small style="color:#aaa;">${item.date}</small>
-                </div>
-                <div style="text-align:right;">
-                    <div style="color:#e74c3c; font-weight:bold; font-size:16px;">-${Number(item.amount).toLocaleString()}원</div>
-                    <div class="btn-group">
-                        <button class="small-btn edit-btn" onclick='startEdit(${JSON.stringify(item)})'>수정</button>
-                        <button class="small-btn del-btn" onclick="deleteItem('${item.id}')">삭제</button>
-                    </div>
-                </div>
-            </div>
-        `).join('');
-
-        updateChart(data);
-    }
-
-    // 차트 업데이트
-    function updateChart(data) {
-        const cats = ['식비', '교통비', '쇼핑', '기타'];
-        const totals = cats.map(c => data.filter(i => i.category === c).reduce((s, i) => s + Number(i.amount), 0));
-        const ctx = document.getElementById('expenseChart').getContext('2d');
-        if (expenseChart) expenseChart.destroy();
-        expenseChart = new Chart(ctx, {
-            type: 'doughnut',
-            data: {
-                labels: cats,
-                datasets: [{ data: totals, backgroundColor: ['#03cf5d', '#3498db', '#f1c40f', '#95a5a6'], borderWidth: 0 }]
-            },
-            options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'right' } } }
-        });
-    }
+/* ======================
+   UI
+====================== */
+function showMain(user){
+  auth.classList.add('hidden');
+  main.classList.remove('hidden');
+  userEmail.innerText = user.email || user.user_metadata?.name || '사용자';
+}
 </script>
+
 </body>
 </html>
