@@ -31,6 +31,7 @@ body{
 }
 .hidden{display:none}
 
+/* 카드 */
 .card{
   background:var(--card);
   margin:16px;
@@ -50,13 +51,16 @@ input,select,button{
 button{
   border:none;
   font-weight:600;
+  cursor:pointer;
 }
 .primary{background:var(--primary);color:#fff}
+.google{background:#fff}
+.kakao{background:#fee500}
 .gray{background:#aaa;color:#fff}
-.del{background:#e74c3c;color:#fff}
 .edit{background:#3498db;color:#fff}
+.del{background:#e74c3c;color:#fff}
 
-/* ---------- 헤더 ---------- */
+/* 요약 */
 .summary{
   background:linear-gradient(135deg,#03c75a,#02b350);
   color:#fff;
@@ -65,7 +69,7 @@ button{
   border-radius:22px;
 }
 
-/* ---------- 내역 ---------- */
+/* 내역 */
 .item{
   background:#fff;
   margin:10px 16px;
@@ -78,7 +82,7 @@ button{
 .btns{display:flex;gap:6px;margin-top:6px}
 .small{padding:6px;font-size:11px}
 
-/* ---------- 탭바 ---------- */
+/* 탭바 */
 .tabbar{
   position:fixed;
   bottom:0;
@@ -99,11 +103,11 @@ button{
 }
 .tab.active{color:var(--primary);font-weight:bold}
 
-/* ---------- 테트리스 ---------- */
+/* 테트리스 */
 #tetris{
   background:#111;
-  margin:auto;
   display:block;
+  margin:auto;
 }
 </style>
 </head>
@@ -113,11 +117,16 @@ button{
 <!-- ================= 로그인 ================= -->
 <div id="auth" class="app" style="padding:40px 20px;text-align:center">
   <h2 style="color:var(--primary)">스마트 가계부 Pro</h2>
-  <button onclick="oauthLogin('google')">Google 로그인</button>
-  <hr>
-  <input id="email" placeholder="이메일">
+
+  <button class="google" onclick="oauthLogin('google')">🔵 Google로 시작하기</button>
+  <button class="kakao" onclick="oauthLogin('kakao')">🟡 Kakao로 시작하기</button>
+
+  <hr style="margin:25px 0">
+
+  <input id="email" type="email" placeholder="이메일">
   <input id="password" type="password" placeholder="비밀번호">
-  <button class="primary" onclick="emailLogin()">로그인</button>
+  <button class="primary" onclick="emailLogin()">이메일 로그인</button>
+  <button class="gray" onclick="emailSignup()">이메일 회원가입</button>
 </div>
 
 <!-- ================= 메인 ================= -->
@@ -142,7 +151,7 @@ button{
     <select id="category">
       <option>식비</option><option>교통비</option><option>쇼핑</option><option>기타</option>
     </select>
-    <input id="amount" placeholder="금액">
+    <input id="amount" type="number" placeholder="금액">
     <input id="memo" placeholder="메모">
     <button class="primary" onclick="saveExpense()">저장</button>
   </div>
@@ -169,14 +178,14 @@ button{
   <div class="card" style="text-align:center">
     <h4>🎮 미니 테트리스</h4>
     <canvas id="tetris" width="200" height="400"></canvas>
-    <p style="font-size:12px">← → ↓ / ↑ 회전</p>
+    <p style="font-size:12px">← → ↓ / ↑</p>
   </div>
 </section>
 
 </div>
 
 <!-- 탭바 -->
-<div class="tabbar hidden" id="tabbar">
+<div id="tabbar" class="tabbar hidden">
   <div class="tab active" onclick="showTab('home',this)">홈</div>
   <div class="tab" onclick="showTab('stats',this)">통계</div>
   <div class="tab" onclick="showTab('settings',this)">설정</div>
@@ -185,7 +194,7 @@ button{
 
 <script>
 /* ================= CONFIG ================= */
-const sb = supabase.createClient(
+const sb=supabase.createClient(
  'https://bynawxhwdshjjudwczju.supabase.co',
  'sb_publishable_7Y23Naq_v7I7jAIszAVfUg_Hd5XRYwb'
 );
@@ -196,15 +205,34 @@ sb.auth.getSession().then(({data})=>{
  if(data.session) showMain(data.session.user);
 });
 
-function oauthLogin(p){
- sb.auth.signInWithOAuth({provider:p,options:{redirectTo:location.origin}});
+function oauthLogin(provider){
+ sb.auth.signInWithOAuth({
+  provider,
+  options:{redirectTo:location.origin}
+ });
 }
+
 async function emailLogin(){
- const {data}=await sb.auth.signInWithPassword({email:email.value,password:password.value});
+ const {data,error}=await sb.auth.signInWithPassword({
+  email:email.value,
+  password:password.value
+ });
+ if(error) return alert(error.message);
  showMain(data.user);
 }
+
+async function emailSignup(){
+ const {error}=await sb.auth.signUp({
+  email:email.value,
+  password:password.value
+ });
+ if(error) alert(error.message);
+ else alert('가입 완료! 로그인하세요.');
+}
+
 async function logout(){
- await sb.auth.signOut(); location.reload();
+ await sb.auth.signOut();
+ location.reload();
 }
 
 /* ================= UI ================= */
@@ -237,11 +265,12 @@ async function saveExpense(){
  editId.value
  ? await sb.from('expenses').update(payload).eq('id',editId.value)
  : await sb.from('expenses').insert([payload]);
+
  editId.value=""; amount.value=memo.value="";
  loadData();
 }
 
-async function editExpense(i){
+function editExpense(i){
  editId.value=i.id;
  date.value=i.date;
  category.value=i.category;
@@ -265,8 +294,8 @@ async function loadData(){
    <div>
     <b>${i.memo}</b><br><small>${i.date}</small>
     <div class="btns">
-      <button class="edit small" onclick='editExpense(${JSON.stringify(i)})'>수정</button>
-      <button class="del small" onclick='delExpense("${i.id}")'>삭제</button>
+     <button class="edit small" onclick='editExpense(${JSON.stringify(i)})'>수정</button>
+     <button class="del small" onclick='delExpense("${i.id}")'>삭제</button>
     </div>
    </div>
    <div>- ${i.amount.toLocaleString()}원</div>
@@ -288,13 +317,12 @@ function updateChart(data){
 
 /* ================= 테트리스 ================= */
 const ctx=tetris.getContext('2d');
-const grid=20;
 let y=0;
 setInterval(()=>{
  ctx.clearRect(0,0,200,400);
  ctx.fillStyle='#0f0';
  ctx.fillRect(80,y,40,40);
- y=(y+grid)%400;
+ y=(y+20)%400;
 },300);
 </script>
 
