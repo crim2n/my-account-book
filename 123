@@ -1,0 +1,306 @@
+window.__autoSolve = (function () {
+
+// ══════════════════════════════════════════
+// ⏱️ 딜레이 설정 (ms 단위, 여기서만 수정!)
+// ══════════════════════════════════════════
+const DELAY = {
+ANSWER_CLICK:    300,   // 문제 발견 후 정답 클릭까지 대기 (객관식)
+SUBJECTIVE_FILL: 300,   // 문제 발견 후 주관식 입력까지 대기
+AFTER_SUBMIT:    300,   // 주관식 입력 후 제출 버튼 클릭 전 대기
+AFTER_NEXT:      5000,   // 제출 후 다음 문제 이동 전 대기
+NEXT_COOLDOWN:  5000,   // 객관식 정답 클릭 후 다음 버튼 활성화까지 대기
+LOOP_INTERVAL:   500,   // 메인 루프 실행 간격
+};
+
+// ══════════════════════════════════════════
+// 📦 주관식 정답 캐시 (문제텍스트 → 정답)
+// ══════════════════════════════════════════
+const subjectiveCache = {};
+
+// ══════════════════════════════════════════
+// 📝 수동 폴백 정답 목록 (캐시 미스 시 순서대로)
+// ══════════════════════════════════════════
+const subjectiveAnswers = [];
+let subjectiveIndex = 0;
+
+// ── 유틸 ────────────────────────────────────────────────────
+const delay = (ms) => new Promise((res) => setTimeout(res, ms));
+const normalize = (text) =>
+String(text).replace(/\u00A0/g, " ").replace(/\s+/g, " ").trim();
+
+// ── 현재 문제 텍스트 추출 ────────────────────────────────────
+function getQuestionText() {
+const selectors = [
+'[data-functional-selector="question-title"]',
+'[data-functional-selector="block-title"]',
+".question-title",
+];
+for (const sel of selectors) {
+const el = document.querySelector(sel);
+if (el) return normalize(el.innerText || el.textContent);
+}
+return null;
+}
+
+// ── ✅ 정답 공개 DOM 감시 → 캐시 저장 ───────────────────────
+function scanCorrectAnswers() {
+const correctInputs = document.querySelectorAll(
+'input[data-functional-selector="nano-open-ended-correct-answer"]'
+);
+if (!correctInputs.length) return;
+
+const qText = getQuestionText();  
+correctInputs.forEach((input) => {  
+  const answer = normalize(input.value);  
+  if (!answer) return;  
+
+  if (qText) {  
+    if (subjectiveCache[qText] !== answer) {  
+      subjectiveCache[qText] = answer;  
+      console.log(`💾 정답 캐시 저장: "${qText}" → "${answer}"`);  
+    }  
+  } else {  
+    const key = `__q${Object.keys(subjectiveCache).length}`;  
+    subjectiveCache[key] = answer;  
+    console.log(`💾 정답 캐시 저장 (키 없음): "${key}" → "${answer}"`);  
+  }  
+});
+
+}
+
+// ── 다음 버튼 클릭 ──────────────────────────────────────────
+function clickNextButton() {
+const selectors = [
+'button[data-functional-selector="nano-next-button"]',
+'button[data-functional-selector="bottom-bar-next-button"]',
+'button[data-functional-selector="next-button"]',
+];
+for (const sel of selectors) {
+const btn = document.querySelector(sel);
+if (btn && !btn.disabled) {
+console.log("➡️ 다음 버튼 클릭:", sel);
+btn.click();
+return true;
+}
+}
+return false;
+}
+
+// ── ✅ Fiber 유틸 ────────────────────────────────────────────
+function getFiber(el) {
+const k = Object.keys(el).find(k => k.startsWith('__reactFiber'));
+return el[k];
+}
+
+function findPropUp(startFiber, predicate) {
+let node = startFiber;
+while (node) {
+const p = node.memoizedProps || node.pendingProps;
+if (p && predicate(p)) return { node, props: p };
+node = node.return;
+}
+return null;
+}
+
+// ── ✅ 객관식 정답 인덱스 추출 (Fiber) ──────────────────────
+function getCorrectIndex() {
+const buttons = document.querySelectorAll('button[data-functional-selector^="answer-"]');
+for (const btn of buttons) {
+const fiber = getFiber(btn);
+let node = fiber;
+while (node) {
+const p = node.memoizedProps || node.pendingProps;
+if (p?.choices) {
+const idx = p.choices.findIndex(c => c.correct);
+if (idx !== -1) return { idx, choices: p.choices };
+}
+node = node.return;
+}
+}
+return null;
+}
+
+// ── ✅ 객관식 onSelectAnswer 직접 호출 (isTrusted 우회) ──────
+function selectAnswer(idx) {
+const btn = document.querySelector('button[data-functional-selector="answer-0"]');
+if (!btn) return false;
+
+const fiber = getFiber(btn);  
+const found = findPropUp(fiber, p => typeof p.onSelectAnswer === 'function');  
+if (!found) {  
+  console.warn('[autoSolve] onSelectAnswer 못 찾음');  
+  return false;  
+}  
+
+found.props.onSelectAnswer(idx);  
+console.log(`✅ 객관식 onSelectAnswer(${idx}) 호출!`);  
+return true;
+
+}
+
+// ── ✅ 주관식 처리 ───────────────────────────────────────────
+async function handleSubjective() {
+const input = Array.from(
+document.querySelectorAll('input[data-functional-selector="text-answer-input"]')
+).find((el) => {
+const visible = el.offsetParent !== null || el.getClientRects().length > 0;
+return visible && el.value.trim() === "";
+});
+
+if (!input) return false;  
+
+// ① 캐시에서 정답 탐색  
+let answer = null;  
+const qText = getQuestionText();  
+
+if (qText && subjectiveCache[qText]) {  
+  answer = subjectiveCache[qText];  
+  console.log(`🎯 캐시 정답 사용: "${qText}" → "${answer}"`);  
+}  
+
+// ② 캐시 미스 → 수동 폴백  
+if (!answer) {  
+  if (subjectiveIndex < subjectiveAnswers.length) {  
+    answer = subjectiveAnswers[subjectiveIndex];  
+    console.log(`📋 폴백 정답 사용 [${subjectiveIndex}]: "${answer}"`);  
+    subjectiveIndex++;  
+  } else {  
+    console.log("❓ 주관식 정답 없음 (캐시 & 폴백 모두 미스)");  
+    return false;  
+  }  
+}  
+
+// ③ 딜레이 후 입력 (SUBJECTIVE_FILL)  
+await delay(DELAY.SUBJECTIVE_FILL);  
+
+const nativeSetter = Object.getOwnPropertyDescriptor(  
+  window.HTMLInputElement.prototype,  
+  "value"  
+)?.set;  
+
+input.focus();  
+nativeSetter ? nativeSetter.call(input, answer) : (input.value = answer);  
+
+input.dispatchEvent(new Event("input",  { bubbles: true }));  
+input.dispatchEvent(new Event("change", { bubbles: true }));  
+input.dispatchEvent(new KeyboardEvent("keyup", {  
+  bubbles: true, key: "Enter", code: "Enter",  
+}));  
+
+console.log(`✍️ 주관식 입력: "${answer}"`);  
+
+// ④ 딜레이 후 제출 (AFTER_SUBMIT)  
+await delay(DELAY.AFTER_SUBMIT);  
+
+const submitBtn =  
+  document.querySelector('button[data-testid="text-answer-submit"]') ||  
+  document.querySelector('button[type="submit"]:not([data-functional-selector^="answer-"])');  
+
+if (submitBtn) {  
+  submitBtn.click();  
+  console.log("🚀 주관식 제출 완료");  
+}  
+
+// ⑤ 딜레이 후 다음 이동 (AFTER_NEXT)  
+await delay(DELAY.AFTER_NEXT);  
+waitingForNext = true;  
+
+return true;
+
+}
+
+// ── 상태 ────────────────────────────────────────────────────
+let lastAnswer     = null;
+let answered       = false;
+let waitingForNext = false;
+let pendingAnswer  = false;  // 딜레이 중 중복 실행 방지
+
+// ── 메인 루프 ────────────────────────────────────────────────
+const interval = setInterval(() => {
+
+// 항상 정답 공개 DOM 스캔 (주관식 캐시 축적)  
+scanCorrectAnswers();  
+
+// [1] 다음 버튼 대기 중  
+if (waitingForNext) {  
+  const clicked = clickNextButton();  
+  if (clicked) {  
+    waitingForNext = false;  
+    answered       = false;  
+    lastAnswer     = null;  
+    pendingAnswer  = false;  
+    console.log("⏭️ 다음 문제로 이동...");  
+  }  
+  return;  
+}  
+
+// [2] 이번 문제 이미 답변 완료 또는 딜레이 처리 중  
+if (answered || pendingAnswer) return;  
+
+// ══ [3-A] 객관식 처리 ════════════════════════════════════  
+const result = getCorrectIndex();  
+if (result) {  
+  const { idx, choices } = result;  
+  const correctAnswer = normalize(choices[idx].answer);  
+
+  if (correctAnswer === lastAnswer) return; // 중복 방지  
+
+  // ANSWER_CLICK 딜레이 후 클릭  
+  pendingAnswer = true;  
+  setTimeout(() => {  
+    const ok = selectAnswer(idx);  
+    if (ok) {  
+      console.log(`✅ 객관식 정답: [${idx}] "${correctAnswer}"`);  
+      lastAnswer    = correctAnswer;  
+      answered      = true;  
+      setTimeout(() => { waitingForNext = true; }, DELAY.NEXT_COOLDOWN);  
+    } else {  
+      console.log(`⚠️ onSelectAnswer 호출 실패`);  
+      pendingAnswer = false; // 실패 시 재시도 허용  
+    }  
+  }, DELAY.ANSWER_CLICK);  
+
+  return;  
+}  
+
+// ══ [3-B] 주관식 처리 ════════════════════════════════════  
+pendingAnswer = true;  
+handleSubjective().then((did) => {  
+  if (did) {  
+    answered = true;  
+  } else {  
+    pendingAnswer = false; // 입력 실패 시 재시도 허용  
+  }  
+});
+
+}, DELAY.LOOP_INTERVAL);
+
+console.log("🚀 자동풀이 시작! (객관식 onSelectAnswer + 주관식 캐시 통합)");
+
+return {
+stop: () => {
+clearInterval(interval);
+console.log("🛑 자동풀이 중지됨");
+},
+next: () => {
+lastAnswer     = null;
+answered       = false;
+waitingForNext = false;
+pendingAnswer  = false;
+clickNextButton();
+console.log("⏭️ 수동 다음 이동");
+},
+status: () => {
+console.log({ lastAnswer, answered, waitingForNext, pendingAnswer, subjectiveIndex, subjectiveCache });
+},
+cache: () => {
+console.table(subjectiveCache);
+},
+setSubjective: (arr) => {
+subjectiveAnswers.length = 0;
+arr.forEach((a) => subjectiveAnswers.push(a));
+subjectiveIndex = 0;
+console.log("📝 폴백 정답 교체됨:", subjectiveAnswers);
+},
+};
+})();
